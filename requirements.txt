@@ -7,3 +7,6 @@ langchain-community
 numpy
 pydub
 python-dotenv
+flask
+certifi
+paho-mqtt
