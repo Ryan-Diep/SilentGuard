@@ -103,8 +103,14 @@ resource "aws_iam_role_policy_attachment" "lambda_execution_policy" {
 }
 
 # Lambda for Message Handling
+data "archive_file" "message_handler_lambda" {
+  type        = "zip"
+  source_file = "${path.module}/../lambdas/message_handler.py"
+  output_path = "message_handler_zip.zip"
+}
+
 resource "aws_lambda_function" "message_handler" {
-  filename      = "file.zip" # need to upload a zipped Lambda function?? TODO !!
+  filename      = "message_handler_zip.zip"
   function_name = "message_handler"
   runtime       = "python3.9"
   role          = aws_iam_role.lambda_role.arn
@@ -125,8 +131,14 @@ resource "aws_lambda_function" "message_handler" {
 }
 
 # Lambda for Authorization
+data "archive_file" "auth_lambda" {
+  type        = "zip"
+  source_file = "${path.module}/../lambdas/auth.py"
+  output_path = "auth_zip.zip"
+}
+
 resource "aws_lambda_function" "authorizer_lambda" {
-  filename      = "file.zip" # TODO !!
+  filename      = "auth_zip.zip"
   function_name = "authorizer_lambda"
   runtime       = "python3.9"
   role          = aws_iam_role.lambda_role.arn
