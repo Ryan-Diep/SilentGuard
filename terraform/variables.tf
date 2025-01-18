@@ -22,3 +22,24 @@ variable "allowed_ip_range" {
   description = "The IP range allowed to access resources"
   type        = string
 }
+
+variable "solace_username" {
+  description = "Solace username"
+  type        = string
+  default     = "solace-cloud-client"
+}
+
+variable "solace_password" {
+  description = "Solace password"
+  type        = string
+}
+
+variable "solace_url" {
+  description = "Solace url"
+  type        = string
+}
+
+variable "solace_port" {
+  description = "Solace port"
+  type        = string
+}

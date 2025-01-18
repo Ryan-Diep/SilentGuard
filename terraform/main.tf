@@ -96,10 +96,27 @@ resource "aws_iam_role" "lambda_role" {
   })
 }
 
+# AWS Caller Identity
+data "aws_caller_identity" "current" {}
+
 # Attach Policies to Lambda Role
-resource "aws_iam_role_policy_attachment" "lambda_execution_policy" {
+resource "aws_iam_policy" "secrets_policy" {
+  name = "secrets_policy"
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect   = "Allow",
+        Action   = ["secretsmanager:GetSecretValue"],
+        Resource = "arn:aws:secretsmanager:${var.region}:${data.aws_caller_identity.current.account_id}:secret:solace-auth-token-osQIUU"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "secrets_attachment" {
   role       = aws_iam_role.lambda_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  policy_arn = aws_iam_policy.secrets_policy.arn
 }
 
 # Lambda for Message Handling
@@ -114,13 +131,15 @@ resource "aws_lambda_function" "message_handler" {
   function_name = "message_handler"
   runtime       = "python3.9"
   role          = aws_iam_role.lambda_role.arn
-  handler       = "handler.lambda_handler"
-
+  handler       = "lambda_handler"
 
   environment {
     variables = {
-      VPC_ID = aws_vpc.main.id
-      REGION = var.region
+      VPC_ID          = aws_vpc.main.id
+      REGION          = var.region
+      SOLACE_HOST     = join("", ["tcp://", var.solace_url, ":", var.solace_port])
+      SOLACE_USERNAME = var.solace_username
+      SOLACE_PASSWORD = var.solace_password
     }
   }
 
@@ -142,11 +161,11 @@ resource "aws_lambda_function" "authorizer_lambda" {
   function_name = "authorizer_lambda"
   runtime       = "python3.9"
   role          = aws_iam_role.lambda_role.arn
-  handler       = "auth.lambda_handler"
+  handler       = "lambda_handler"
 
   environment {
     variables = {
-      AUTH_TOKEN = "some sort of solace secret?" # TODO!!
+      REGION = var.region
     }
   }
 }
