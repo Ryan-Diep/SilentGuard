@@ -63,8 +63,8 @@ resource "aws_security_group" "lambda_sg" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    from_port   = -1
-    to_port     = -1
+    from_port   = 0
+    to_port     = 0
     protocol    = "-1"
     cidr_blocks = [var.vpc_cidr_block] # Should allow all within VPC
   }
@@ -81,6 +81,37 @@ resource "aws_security_group" "lambda_sg" {
 #############################################################################################
 # Lambda functions setup
 # Lambda IAM Role
+resource "aws_iam_policy" "lambda_vpc_permissions" {
+  name = "LambdaVPCAccessPolicy"
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "ec2:CreateNetworkInterface",
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DeleteNetworkInterface"
+        ],
+        Resource = "*"
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "ec2:AssignPrivateIpAddresses",
+          "ec2:UnassignPrivateIpAddresses"
+        ],
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_vpc_permissions_attachment" {
+  role       = aws_iam_role.lambda_role.name
+  policy_arn = aws_iam_policy.lambda_vpc_permissions.arn
+}
+
 resource "aws_iam_role" "lambda_role" {
   name = "lambda_role"
 
@@ -88,9 +119,9 @@ resource "aws_iam_role" "lambda_role" {
     Version = "2012-10-17",
     Statement = [
       {
-        Action    = "sts:AssumeRole",
         Effect    = "Allow",
-        Principal = { Service = "lambda.amazonaws.com" }
+        Principal = { Service = "lambda.amazonaws.com" },
+        Action    = "sts:AssumeRole"
       }
     ]
   })
@@ -133,6 +164,11 @@ resource "aws_lambda_function" "message_handler" {
   role          = aws_iam_role.lambda_role.arn
   handler       = "lambda_handler"
 
+  vpc_config {
+    subnet_ids         = [aws_subnet.private.id]
+    security_group_ids = [aws_security_group.lambda_sg.id]
+  }
+
   environment {
     variables = {
       VPC_ID          = aws_vpc.main.id
@@ -141,11 +177,6 @@ resource "aws_lambda_function" "message_handler" {
       SOLACE_USERNAME = var.solace_username
       SOLACE_PASSWORD = var.solace_password
     }
-  }
-
-  vpc_config {
-    subnet_ids         = [aws_subnet.private.id]
-    security_group_ids = [aws_security_group.lambda_sg.id]
   }
 }
 
@@ -188,11 +219,12 @@ resource "aws_apigatewayv2_integration" "lambda_integration" {
 
 # Lambda Authorizer
 resource "aws_apigatewayv2_authorizer" "lambda_authorizer" {
-  api_id           = aws_apigatewayv2_api.http_api.id
-  authorizer_type  = "REQUEST"
-  name             = "SolaceAuthorizer"
-  authorizer_uri   = aws_lambda_function.authorizer_lambda.invoke_arn
-  identity_sources = ["$request.header.Authorization"]
+  api_id                            = aws_apigatewayv2_api.http_api.id
+  authorizer_type                   = "REQUEST"
+  name                              = "SolaceAuthorizer"
+  authorizer_uri                    = aws_lambda_function.authorizer_lambda.invoke_arn
+  identity_sources                  = ["$request.header.Authorization"]
+  authorizer_payload_format_version = "2.0"
 }
 
 # Attach Authorizer and Integration to a Route
