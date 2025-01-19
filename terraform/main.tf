@@ -44,6 +44,9 @@ resource "aws_lambda_function" "message_handler" {
   role          = aws_iam_role.lambda_role.arn
   handler       = "lambda_function.lambda_handler"
 
+  memory_size = 256
+  timeout     = 15
+
   # Attach the dependency layers
   layers = [
     aws_lambda_layer_version.groq_layer.arn,
