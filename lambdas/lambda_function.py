@@ -41,13 +41,14 @@ def get_groq_responses(client, location):
         messages=[
             {
                 "role": "user",
-                "content": f"""You are someone calling the Police on behalf of someone reporting an emergency. 
-                Provide the police with only factual details that were given.
-                You are reporting someone's location and that they are in danger. Keep it short and to the point.""",
+                "content": f"""You are calling the Police to report an emergency. 
+                The only information you have is the following location: {location}. 
+                You do not have any other details, and you are required to state only the location.
+                Provide a concise message reporting the location and that the person is in danger. Do not add any extra information or assumptions.""",
             }
         ],
         model="llama3-8b-8192",
-        temperature=0.1,
+        temperature=0.1, 
     )
     simulated_police_call = simulated_call_response.choices[0].message.content
     return emergency_number, simulated_police_call
