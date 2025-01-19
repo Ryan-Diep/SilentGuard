@@ -38,3 +38,8 @@ variable "solace_port" {
   description = "Solace port"
   type        = string
 }
+
+variable "groq_api_key" {
+  description = "Groq API key"
+  type        = string
+}
