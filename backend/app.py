@@ -34,7 +34,7 @@ CORS(app)
 # Callback on connection
 def on_connect(client, userdata, flags, rc):
     print(f'Connected (Result: {rc})')
-    client.subscribe('response-topic')
+    client.subscribe(os.getenv('RESPONSE_TOPIC'))
 
 # Callback when message is sent
 def on_publish(client, userdata, mid):
@@ -46,7 +46,7 @@ def on_message(client, userdata, message):
 
 # Function to publish message
 def send_message(client, location):
-    topic = os.getenv('TOPIC')
+    topic = os.getenv('PUBLISH_TOPIC')
     client.publish(topic, location, qos=1)
 
 client = mqtt.Client()
