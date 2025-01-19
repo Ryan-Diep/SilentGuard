@@ -10,3 +10,4 @@ python-dotenv
 flask
 certifi
 paho-mqtt
+flask-cors

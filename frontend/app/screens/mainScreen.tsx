@@ -7,7 +7,7 @@ export default function App() {
 
   const handleStartCall = async () => {
     try {
-      const response = await fetch('http://<your-flask-server-ip>:5000/start_call', {
+      const response = await fetch('http://192.168.50.115:5000/start_call', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -26,6 +26,18 @@ export default function App() {
 
   return (
     <View style={styles.container}>
+      <TextInput
+        style={styles.input}
+        placeholder="Enter Activation Phrase"
+        value={activationPhrase}
+        onChangeText={setActivationPhrase}
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Enter Confirmation Phrase"
+        value={confirmationPhrase}
+        onChangeText={setConfirmationPhrase}
+      />
       <TouchableOpacity style={styles.button} onPress={handleStartCall}>
         <Text style={styles.buttonText}>Start Call</Text>
       </TouchableOpacity>
@@ -39,6 +51,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#fff',
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    padding: 10,
+    marginBottom: 20,
+    width: '80%',
+    borderRadius: 5,
   },
   button: {
     backgroundColor: '#4CAF50',
