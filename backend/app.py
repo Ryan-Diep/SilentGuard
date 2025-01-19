@@ -230,7 +230,7 @@ class VoiceAssistant:
         audio_bytes.seek(0)
         transcription = self.g_client.audio.transcriptions.create(
             file=("temp.wav", audio_bytes.read()),
-            model="whisper-large-v3-turbo",
+            model="distil-whisper-large-v3-en",
         )
         end = time()
         print(transcription)
@@ -328,6 +328,9 @@ class VoiceAssistant:
             audio_bytes = self.listen_for_speech()
             text = self.speech_to_text(audio_bytes)
 
+            if not self.running:
+                break
+
             if call_made:
             # Agent
                 response_text = self.chat(text, True)
@@ -355,16 +358,19 @@ class VoiceAssistant:
                         self.voice_id = Voices.CHARLIE
                     voice_undetermined = False
 
-                # TTS
-                audio_stream = self.text_to_speech(response_text)
-                audio_iterator = self.audio_stream_to_iterator(audio_stream)
-                self.stream_audio(audio_iterator)
-
                 location = find_location(text)
                 if location != "None":
                     self.location = location
 
                 if self.activation_phrase in text.lower():
                     print("Activation Phrase Detected")
-                    send_message(client, self.activation_phrase)
+                    print(self.location)
+                    send_message(client, self.location)
+
+                # TTS
+                audio_stream = self.text_to_speech(response_text)
+                audio_iterator = self.audio_stream_to_iterator(audio_stream)
+                self.stream_audio(audio_iterator)
+
+
         
