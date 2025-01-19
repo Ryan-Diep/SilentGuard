@@ -314,6 +314,13 @@ class VoiceAssistant:
                 audio_iterator = self.audio_stream_to_iterator(audio_stream)
                 self.stream_audio(audio_iterator)
                 call_made = False
+                self.agent.system_prompt = """\
+                                            You are part of a realtime voice to voice interaction with the human. \
+                                            You are playing the role of a trusted person the user chooses to talk to, like a parent, sibling, or friend. \
+                                            Respond naturally, showing understanding and engagement with what the user says. Avoid asking specific personal questions or mentioning details like family members, pets, or locations unless the user brings them up first. \
+                                            Maintain a calm and supportive tone, and ensure your responses feel conversational and realistic. \
+                                            Respond with fill words like `hmm`, `ohh`, and similar wherever relevant to make your responses sound natural. \
+                                            """
             
             else:
                 response_text = self.chat(text, self.confirmation_phrase, False)
