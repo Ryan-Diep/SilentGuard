@@ -4,20 +4,17 @@ from groq import Groq
 import os
 
 def lambda_handler(event, context):
-    print(event['body'])
-    location = str(base64.b64decode(event['body']))
-    print(f"Decoded location: {location}")
+    location = str(base64.b64decode(event['body']).decode('utf-8'))
 
     client = Groq(
         api_key=os.getenv("API_KEY"),
     )
 
-    # Generate a chat completion using the Groq client
     chat_completion = client.chat.completions.create(
         messages=[
             {
                 "role": "user",
-                "content": f"What is the weather in {location} today?",
+                "content": f"What is the countries mergency number for the country with this address {location}? Respond with just the number.",
             }
         ],
         model="llama3-8b-8192",

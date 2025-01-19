@@ -16,10 +16,18 @@ provider "aws" {
 #############################################################################################
 # Lambda Layer for Groq
 resource "aws_lambda_layer_version" "groq_layer" {
-  filename            = "${path.module}/../lambdas/libraries.zip"
-  compatible_runtimes = ["python3.13"]
+  filename            = "${path.module}/../lambdas/groq.zip"
+  compatible_runtimes = ["python3.12"]
   layer_name          = "groq-layer"
 }
+
+# Lambda Layer for Paho_MQTT
+resource "aws_lambda_layer_version" "paho_mqtt_layer" {
+  filename            = "${path.module}/../lambdas/paho_mqtt.zip"
+  compatible_runtimes = ["python3.12"]
+  layer_name          = "paho_mqtt_layer"
+}
+
 
 #############################################################################################
 # Lambda Function
@@ -32,13 +40,14 @@ data "archive_file" "lambda_function" {
 resource "aws_lambda_function" "message_handler" {
   filename      = "lambda_function.zip"
   function_name = "message_handler"
-  runtime       = "python3.13"
+  runtime       = "python3.12"
   role          = aws_iam_role.lambda_role.arn
   handler       = "lambda_function.lambda_handler"
 
-  # Attach the Groq layer
+  # Attach the dependency layers
   layers = [
-    aws_lambda_layer_version.groq_layer.arn
+    aws_lambda_layer_version.groq_layer.arn,
+    aws_lambda_layer_version.paho_mqtt_layer.arn
   ]
 
   environment {
