@@ -5,7 +5,6 @@ terraform {
       version = "~> 5.0"
     }
   }
-
   required_version = ">= 1.2.0"
 }
 
@@ -13,51 +12,41 @@ provider "aws" {
   region = var.region
 }
 
-
-#############################################################################################
-# VPC setup
+# VPC Setup
 resource "aws_vpc" "main" {
   cidr_block = var.vpc_cidr_block
-  tags = {
-    Name = "main-vpc"
-  }
+  tags       = { Name = "main-vpc" }
 }
 
 resource "aws_subnet" "private" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.subnet_cidr_block
   availability_zone = var.availability_zone
-  tags = {
-    Name = "private-subnet"
-  }
+  tags              = { Name = "private-subnet" }
 }
 
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
-  tags = {
-    Name = "vpc-igw"
-  }
+  tags   = { Name = "vpc-igw" }
 }
 
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
+  tags   = { Name = "private-route-table" }
 }
 
 resource "aws_route" "internet_access" {
   route_table_id         = aws_route_table.private.id
-  destination_cidr_block = var.allowed_ip_range
+  destination_cidr_block = "0.0.0.0/0"
   gateway_id             = aws_internet_gateway.igw.id
 }
 
-resource "aws_route_table_association" "private_subnet_association" {
+resource "aws_route_table_association" "private_subnet" {
   subnet_id      = aws_subnet.private.id
   route_table_id = aws_route_table.private.id
 }
 
-
-#############################################################################################
-# IAM roles and policies setup
-# IAM Role for Lambda VPC Access
+# Security Group for Lambda
 resource "aws_security_group" "lambda_sg" {
   name_prefix = "lambda-sg"
   vpc_id      = aws_vpc.main.id
@@ -66,186 +55,133 @@ resource "aws_security_group" "lambda_sg" {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
-    cidr_blocks = [var.vpc_cidr_block] # Should allow all within VPC
+    cidr_blocks = [var.vpc_cidr_block]
   }
 
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
-    cidr_blocks = [var.allowed_ip_range]
+    cidr_blocks = ["0.0.0.0/0"]
   }
 }
 
-
-#############################################################################################
-# Lambda functions setup
-# Lambda IAM Role
-resource "aws_iam_policy" "lambda_vpc_permissions" {
-  name = "LambdaVPCAccessPolicy"
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Effect = "Allow",
-        Action = [
-          "ec2:CreateNetworkInterface",
-          "ec2:DescribeNetworkInterfaces",
-          "ec2:DeleteNetworkInterface"
-        ],
-        Resource = "*"
-      },
-      {
-        Effect = "Allow",
-        Action = [
-          "ec2:AssignPrivateIpAddresses",
-          "ec2:UnassignPrivateIpAddresses"
-        ],
-        Resource = "*"
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "lambda_vpc_permissions_attachment" {
-  role       = aws_iam_role.lambda_role.name
-  policy_arn = aws_iam_policy.lambda_vpc_permissions.arn
-}
-
+# Lambda IAM Role and Policies
 resource "aws_iam_role" "lambda_role" {
   name = "lambda_role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
-    Statement = [
-      {
-        Effect    = "Allow",
-        Principal = { Service = "lambda.amazonaws.com" },
-        Action    = "sts:AssumeRole"
-      }
-    ]
+    Statement = [{
+      Effect    = "Allow",
+      Principal = { Service = "lambda.amazonaws.com" },
+      Action    = "sts:AssumeRole"
+    }]
   })
 }
 
-# AWS Caller Identity
-data "aws_caller_identity" "current" {}
-
-# Attach Policies to Lambda Role
-resource "aws_iam_policy" "secrets_policy" {
-  name = "secrets_policy"
+resource "aws_iam_policy" "lambda_policy" {
+  name = "lambda_policy"
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
       {
         Effect   = "Allow",
+        Action   = ["ec2:CreateNetworkInterface", "ec2:DescribeNetworkInterfaces", "ec2:DeleteNetworkInterface"],
+        Resource = "*"
+      },
+      {
+        Effect   = "Allow",
         Action   = ["secretsmanager:GetSecretValue"],
-        Resource = "arn:aws:secretsmanager:${var.region}:${data.aws_caller_identity.current.account_id}:secret:solace-auth-token-osQIUU"
+        Resource = "arn:aws:secretsmanager:${var.region}:${data.aws_caller_identity.current.account_id}:secret:solace-auth-token-*"
       }
     ]
   })
 }
 
-resource "aws_iam_role_policy_attachment" "secrets_attachment" {
+resource "aws_iam_role_policy_attachment" "lambda_policy_attachment" {
   role       = aws_iam_role.lambda_role.name
-  policy_arn = aws_iam_policy.secrets_policy.arn
+  policy_arn = aws_iam_policy.lambda_policy.arn
 }
 
-# Lambda for Message Handling
-data "archive_file" "message_handler_lambda" {
-  type        = "zip"
-  source_file = "${path.module}/../lambdas/message_handler.py"
-  output_path = "message_handler_zip.zip"
-}
-
-resource "aws_lambda_function" "message_handler" {
-  filename      = "message_handler_zip.zip"
+# Lambda Functions
+resource "aws_lambda_function" "handler" {
+  filename      = "message_handler.zip"
   function_name = "message_handler"
   runtime       = "python3.9"
   role          = aws_iam_role.lambda_role.arn
   handler       = "lambda_handler"
-
   vpc_config {
     subnet_ids         = [aws_subnet.private.id]
     security_group_ids = [aws_security_group.lambda_sg.id]
   }
-
   environment {
     variables = {
-      VPC_ID          = aws_vpc.main.id
-      REGION          = var.region
-      SOLACE_HOST     = join("", ["tcp://", var.solace_url, ":", var.solace_port])
+      SOLACE_HOST     = "tcp://${var.solace_url}:${var.solace_port}"
       SOLACE_USERNAME = var.solace_username
       SOLACE_PASSWORD = var.solace_password
     }
   }
 }
 
-# Lambda for Authorization
-data "archive_file" "auth_lambda" {
-  type        = "zip"
-  source_file = "${path.module}/../lambdas/auth.py"
-  output_path = "auth_zip.zip"
-}
-
-resource "aws_lambda_function" "authorizer_lambda" {
-  filename      = "auth_zip.zip"
-  function_name = "authorizer_lambda"
+resource "aws_lambda_function" "authorizer" {
+  filename      = "auth.zip"
+  function_name = "authorizer"
   runtime       = "python3.9"
   role          = aws_iam_role.lambda_role.arn
   handler       = "lambda_handler"
-
   environment {
-    variables = {
-      REGION = var.region
-    }
+    variables = { REGION = var.region }
   }
 }
 
-
-#############################################################################################
-# API Gateway setup
-# Create API Gateway
+# API Gateway
 resource "aws_apigatewayv2_api" "http_api" {
   name          = "SolaceHttpAPI"
   protocol_type = "HTTP"
 }
 
-# Integrate Main Lambda with API Gateway
 resource "aws_apigatewayv2_integration" "lambda_integration" {
   api_id           = aws_apigatewayv2_api.http_api.id
   integration_type = "AWS_PROXY"
-  integration_uri  = aws_lambda_function.message_handler.invoke_arn
+  integration_uri  = aws_lambda_function.handler.invoke_arn
 }
 
-# Lambda Authorizer
 resource "aws_apigatewayv2_authorizer" "lambda_authorizer" {
   api_id                            = aws_apigatewayv2_api.http_api.id
   authorizer_type                   = "REQUEST"
   name                              = "SolaceAuthorizer"
-  authorizer_uri                    = aws_lambda_function.authorizer_lambda.invoke_arn
+  authorizer_uri                    = aws_lambda_function.authorizer.invoke_arn
   identity_sources                  = ["$request.header.Authorization"]
   authorizer_payload_format_version = "2.0"
 }
 
-# Attach Authorizer and Integration to a Route
-resource "aws_apigatewayv2_route" "route" {
+resource "aws_apigatewayv2_route" "secured_route" {
   api_id    = aws_apigatewayv2_api.http_api.id
   route_key = "POST /process-message"
+  target    = "integrations/${aws_apigatewayv2_integration.lambda_integration.id}"
 
-  target = "integrations/${aws_apigatewayv2_integration.lambda_integration.id}"
+  authorization_type = "CUSTOM"
+  authorizer_id      = aws_apigatewayv2_authorizer.lambda_authorizer.id
 }
 
-# Stage Deployment -> might not be needed?
-resource "aws_apigatewayv2_stage" "default_stage" {
+resource "aws_apigatewayv2_stage" "default" {
   api_id      = aws_apigatewayv2_api.http_api.id
-  name        = "terraform-stage"
+  name        = "default"
   auto_deploy = true
 }
 
+# Attach API Gateway Trigger to Receiving Lambda
+resource "aws_lambda_permission" "api_gateway_invoke_permission" {
+  statement_id  = "AllowApiGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.handler.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.http_api.execution_arn}/*"
+}
 
-#############################################################################################
-# Get link for API Gateway to connect to solace
+# Output the API Gateway URL
 output "api_gateway_url" {
-  value       = aws_apigatewayv2_stage.default_stage.invoke_url
-  description = "URL for the deployed API Gateway"
+  value       = aws_apigatewayv2_stage.default.invoke_url
+  description = "URL for the API Gateway"
 }

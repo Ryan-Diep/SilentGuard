@@ -18,11 +18,6 @@ variable "availability_zone" {
   type        = string
 }
 
-variable "allowed_ip_range" {
-  description = "The IP range allowed to access resources"
-  type        = string
-}
-
 variable "solace_username" {
   description = "Solace username"
   type        = string
