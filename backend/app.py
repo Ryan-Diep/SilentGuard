@@ -100,7 +100,7 @@ def start_call():
     assistant.activation_phrase = activation_phrase
     assistant.confirmation_phrase = confirmation_phrase
     # assistant.run()
-    thread = Thread(target=assistant.run(confirmation_phrase), daemon=True)
+    thread = Thread(target=assistant.run, daemon=True)
     thread.start()
 
     # Respond back to the client
@@ -295,7 +295,7 @@ class VoiceAssistant:
         print(f"Response: {response}\nResponse Time: {end - start}")
         return response
 
-    def run(self, confirmation_phrase: str):
+    def run(self):
         """
         Main function to run the voice assistant.
         """
@@ -307,7 +307,7 @@ class VoiceAssistant:
 
             if call_made:
             # Agent
-                response_text = self.chat(text, confirmation_phrase, True)
+                response_text = self.chat(text, self.confirmation_phrase, True)
                 
                 # TTS
                 audio_stream = self.text_to_speech(response_text)
@@ -316,7 +316,7 @@ class VoiceAssistant:
                 call_made = False
             
             else:
-                response_text = self.chat(text, confirmation_phrase, False)
+                response_text = self.chat(text, self.confirmation_phrase, False)
                 
                 # TTS
                 audio_stream = self.text_to_speech(response_text)
