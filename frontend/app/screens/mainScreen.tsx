@@ -7,7 +7,7 @@ export default function App() {
 
   const handleStartCall = async () => {
     try {
-      const response = await fetch('http://192.168.50.115:5000/start_call', {
+      const response = await fetch('http://<enter ip address>/start_call', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
