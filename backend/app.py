@@ -32,6 +32,8 @@ from config import (
 app = Flask(__name__)
 CORS(app)
 
+call_made = False
+
 # Callback on connection
 def on_connect(client, userdata, flags, rc):
     print(f'Connected (Result: {rc})')
@@ -44,6 +46,8 @@ def on_publish(client, userdata, mid):
 # Callback when message is received from
 def on_message(client, userdata, message):
     print(f'Received message {message.payload}')
+    global call_made
+    call_made = True
 
 # Function to publish message
 def send_message(client, location):
@@ -80,7 +84,6 @@ def home():
 @app.route("/dummy")
 def dummy():
     send_message(client, "Ottawa")
-    # client.on_message = on_message
     return "dummy route works"
 
 @app.route("/start_call", methods=["POST"])
@@ -97,7 +100,7 @@ def start_call():
     assistant.activation_phrase = activation_phrase
     assistant.confirmation_phrase = confirmation_phrase
     # assistant.run()
-    thread = Thread(target=assistant.run, daemon=True)
+    thread = Thread(target=assistant.run(confirmation_phrase), daemon=True)
     thread.start()
 
     # Respond back to the client
@@ -280,41 +283,47 @@ class VoiceAssistant:
             stream.stop_stream()
             stream.close()
     
-    def chat(self, query: str) -> str:
-        """
-        Chat with an LLM/Agent/Anything you want.
-        Override this method if you want to proccess responses differently.
-
-        Args:
-            query (str): Convert speech to text from microphone input
-        
-        Returns:
-            str: String output to be spoken
-        """
+    def chat(self, query: str, confirmation_phrase: str, call_made: bool=False) -> str:
         start = time()
-        response = self.agent.chat(query)
+        if call_made:
+            response = self.agent.chat(query, confirmation_phrase, False, True)
+            end = time()
+            print(f"Response: {response}\nResponse Time: {end - start}")
+            return response
+        response = self.agent.chat(query, confirmation_phrase)
         end = time()
         print(f"Response: {response}\nResponse Time: {end - start}")
         return response
 
-    def run(self):
+    def run(self, confirmation_phrase: str):
         """
         Main function to run the voice assistant.
         """
+        global call_made
         while True:
             # STT
             audio_bytes = self.listen_for_speech()
             text = self.speech_to_text(audio_bytes)
 
+            if call_made:
             # Agent
-            response_text = self.chat(text)
+                response_text = self.chat(text, confirmation_phrase, True)
+                
+                # TTS
+                audio_stream = self.text_to_speech(response_text)
+                audio_iterator = self.audio_stream_to_iterator(audio_stream)
+                self.stream_audio(audio_iterator)
+                call_made = False
             
-            # TTS
-            audio_stream = self.text_to_speech(response_text)
-            audio_iterator = self.audio_stream_to_iterator(audio_stream)
-            self.stream_audio(audio_iterator)
+            else:
+                response_text = self.chat(text, confirmation_phrase, False)
+                
+                # TTS
+                audio_stream = self.text_to_speech(response_text)
+                audio_iterator = self.audio_stream_to_iterator(audio_stream)
+                self.stream_audio(audio_iterator)
 
-            if self.activation_phrase in text.lower():
-                print("Activation Phrase Detected")
-                send_message(client, "asdf")
+                if self.activation_phrase in text.lower():
+                    print("Activation Phrase Detected")
+                    send_message(client, "asdf")
         

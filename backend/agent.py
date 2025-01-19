@@ -58,11 +58,21 @@ class Agent:
 
         self.chat_memory.save_context({'input': llm_input['input']}, {'output': response})
     
-    def chat(self, query: str, streaming: bool=False):
+    def chat(self, query: str, confirmation_phrase: str, streaming: bool=False, call_made: bool=False):
         llm_input = {
             'input': query,
             'chat_history': self.chat_memory.load_memory_variables({})[self.memory_key]
         }
+
+        if call_made:
+            self.system_prompt = f"""\
+                                    You are part of a realtime voice to voice interaction with the human. \
+                                    You are playing the role of a trusted person the user chooses to talk to, like a parent, sibling, or friend. \
+                                    Respond naturally, showing understanding and engagement with what the user says. Avoid asking specific personal questions or mentioning details like family members, pets, or locations unless the user brings them up first. \
+                                    Maintain a calm and supportive tone, and ensure your responses feel conversational and realistic. \
+                                    Respond with fill words like `hmm`, `ohh`, and similar wherever relevant to make your responses sound natural. \
+                                    When you respond, make sure you find a way to sneak {confirmation_phrase} into your response as natural as you can.
+                                    """
 
         if streaming:
             return self._stream_response(llm_input)
@@ -76,6 +86,6 @@ if __name__ == "__main__":
     while True:
         query = input("Chat: ")
         print("Response:\n")
-        for token in agent.chat(query, streaming=True):
+        for token in agent.chat(query, "", streaming=True):
             print(token, end='', flush=True)
         print("\n")
