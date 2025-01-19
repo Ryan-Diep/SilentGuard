@@ -49,6 +49,6 @@ def send_message(location):
 
     client.loop_start()
     topic = os.getenv('TOPIC')
-    client.publish(topic, json.dumps({"location": location}), qos=1)
+    client.publish(topic, location, qos=1)
     client.loop_stop()
     client.disconnect()
