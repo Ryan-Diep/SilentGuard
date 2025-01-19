@@ -74,7 +74,7 @@ def find_voice(text):
             # Set a user message for the assistant to respond to.
             {
                 "role": "user",
-                "content": "Check the following text for a name or title (Mom, Mr, Sir, etc) and determine if it is a man or woman name/title and return 'man' if you identify a man, 'woman' if you identify a woman and if there is no name/title make a guess based on context and return 'man' or 'woman' respectively:" + text,
+                "content": "Check the following text for a name or title (Mom, Mr, Sir, etc) and determine if it is a man or woman name/title if there is no name/title make a guess based on context (VERY IMPORTANT TO ALWAYS RETURN ONLYONE WORD, 'man' OR 'woman'): " + text,
             }
         ],
 

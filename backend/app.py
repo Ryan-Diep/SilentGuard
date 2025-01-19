@@ -35,6 +35,8 @@ CORS(app)
 
 call_made = False
 voice_undetermined = True
+current_assistant_thread = None
+assistant = None
 
 # Callback on connection
 def on_connect(client, userdata, flags, rc):
@@ -90,6 +92,8 @@ def dummy():
 
 @app.route("/start_call", methods=["POST"])
 def start_call():
+    global current_assistant_thread, assistant
+
     data = request.get_json()
     activation_phrase = data.get("activationPhrase")
     confirmation_phrase = data.get("confirmationPhrase")
@@ -100,11 +104,23 @@ def start_call():
 
     assistant = VoiceAssistant(activation_phrase, confirmation_phrase)
     # assistant.run()
-    thread = Thread(target=assistant.run, daemon=True)
-    thread.start()
+    current_assistant_thread = Thread(target=assistant.run, daemon=True)
+    current_assistant_thread.start()
 
     # Respond back to the client
     return jsonify({"message": "Call started successfully!"}), 200
+
+@app.route("/end_call", methods=["POST"])
+def end_call():
+    global current_assistant_thread, assistant
+    if current_assistant_thread and current_assistant_thread.is_alive():
+        assistant.stop()
+        current_assistant_thread.join(timeout=5)
+        current_assistant_thread = None
+        assistant = None
+        return jsonify({"message": "Call stopped successfully!"}), 200
+    
+    return jsonify({"message": "No active call to stop"}), 400
 
 class VoiceAssistant:
     def __init__(
@@ -120,6 +136,10 @@ class VoiceAssistant:
         self.g_client = Groq(api_key=GROQ_API_KEY)
         self.activation_phrase = activation_phrase
         self.location = "Canada"
+        self.running = True
+
+    def stop(self):
+        self.running = False
 
     def is_silence(self, data):
         """
@@ -303,7 +323,7 @@ class VoiceAssistant:
         """
         global call_made, voice_undetermined
 
-        while True:
+        while self.running:
             # STT
             audio_bytes = self.listen_for_speech()
             text = self.speech_to_text(audio_bytes)
