@@ -29,12 +29,21 @@ CHAT_MEMORY = ConversationBufferMemory(
 class Agent:
     def __init__(
         self,
+        confirmation_phrase,
         llm: BaseChatModel = LLM,
         system_prompt: str = SYSTEM_PROMPT,
         chat_memory=CHAT_MEMORY
     ) -> None:
         self.llm = llm
         self.system_prompt = system_prompt
+        self.confirmation_prompt = f"""\
+        You are part of a realtime voice to voice interaction with the human. \
+        You are playing the role of a trusted person the user chooses to talk to, like a parent, sibling, or friend. \
+        Respond naturally, showing understanding and engagement with what the user says. Avoid asking specific personal questions or mentioning details like family members, pets, or locations unless the user brings them up first. \
+        Maintain a calm and supportive tone, and ensure your responses feel conversational and realistic. \
+        Respond with fill words like `hmm`, `ohh`, and similar wherever relevant to make your responses sound natural. \
+        When you respond, make sure you find a way to sneak "{confirmation_phrase}" into your response as natural as you can.
+        """
         self.chat_memory = chat_memory
         self.memory_key = chat_memory.memory_key
         self.prompt = ChatPromptTemplate.from_messages([
@@ -42,10 +51,21 @@ class Agent:
             MessagesPlaceholder(variable_name=self.memory_key, optional=True),
             HumanMessagePromptTemplate.from_template("{input}")
         ])
+        self.confirmed_prompt = ChatPromptTemplate.from_messages([
+            SystemMessagePromptTemplate.from_template(self.confirmation_prompt),
+            MessagesPlaceholder(variable_name=self.memory_key, optional=True),
+            HumanMessagePromptTemplate.from_template("{input}")
+        ])
         self.agent = self.prompt | self.llm | StrOutputParser()
+        self.confirmed_agent = self.confirmed_prompt | self.llm | StrOutputParser()
 
     def _return_response(self, llm_input: Dict) -> Generator[str, Any, None]:
         response = self.agent.invoke(llm_input)
+        self.chat_memory.save_context({'input': llm_input['input']}, {'output': response})
+        return response
+    
+    def _return_confirmed_response(self, llm_input: Dict) -> Generator[str, Any, None]:
+        response = self.confirmed_agent.invoke(llm_input)
         self.chat_memory.save_context({'input': llm_input['input']}, {'output': response})
         return response
     
@@ -57,27 +77,33 @@ class Agent:
             yield chunk
 
         self.chat_memory.save_context({'input': llm_input['input']}, {'output': response})
+
+    def _stream_confirmed_response(self, llm_input: Dict) -> Generator[str, Any, None]:
+        stream = self.confirmed_agent.stream(llm_input)
+        response = ""
+        for chunk in stream:
+            response += chunk
+            yield chunk
+
+        self.chat_memory.save_context({'input': llm_input['input']}, {'output': response})
     
-    def chat(self, query: str, confirmation_phrase: str, streaming: bool=False, call_made: bool=False):
+    def chat(self, query: str, streaming: bool=False, call_made: bool=False):
         llm_input = {
             'input': query,
             'chat_history': self.chat_memory.load_memory_variables({})[self.memory_key]
         }
 
         if call_made:
-            self.system_prompt = f"""\
-                                    You are part of a realtime voice to voice interaction with the human. \
-                                    You are playing the role of a trusted person the user chooses to talk to, like a parent, sibling, or friend. \
-                                    Respond naturally, showing understanding and engagement with what the user says. Avoid asking specific personal questions or mentioning details like family members, pets, or locations unless the user brings them up first. \
-                                    Maintain a calm and supportive tone, and ensure your responses feel conversational and realistic. \
-                                    Respond with fill words like `hmm`, `ohh`, and similar wherever relevant to make your responses sound natural. \
-                                    When you respond, make sure you find a way to sneak {confirmation_phrase} into your response as natural as you can.
-                                    """
-
-        if streaming:
-            return self._stream_response(llm_input)
+            print("Prompt Changed")
+            if streaming:
+                return self._stream_confirmed_response(llm_input)
+            else:
+                return self._return_confirmed_response(llm_input)
         else:
-            return self._return_response(llm_input)
+            if streaming:
+                return self._stream_response(llm_input)
+            else:
+                return self._return_response(llm_input)
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@ from io import BytesIO
 from elevenlabs.client import ElevenLabs
 from elevenlabs import VoiceSettings
 from agent import Agent
+from parser import find_location, find_voice
 from pydub import AudioSegment
 from groq import Groq
 from flask import Flask, request, jsonify
@@ -33,6 +34,7 @@ app = Flask(__name__)
 CORS(app)
 
 call_made = False
+voice_undetermined = True
 
 # Callback on connection
 def on_connect(client, userdata, flags, rc):
@@ -96,9 +98,7 @@ def start_call():
     print(f"Activation Phrase: {activation_phrase}")
     print(f"Confirmation Phrase: {confirmation_phrase}")
 
-    assistant = VoiceAssistant()
-    assistant.activation_phrase = activation_phrase
-    assistant.confirmation_phrase = confirmation_phrase
+    assistant = VoiceAssistant(activation_phrase, confirmation_phrase)
     # assistant.run()
     thread = Thread(target=assistant.run, daemon=True)
     thread.start()
@@ -109,15 +109,17 @@ def start_call():
 class VoiceAssistant:
     def __init__(
         self,
+        activation_phrase,
+        confirmation_phrase,
         voice_id: Optional[str] = Voices.CHARLIE,
     ):
         self.audio = pyaudio.PyAudio()
-        self.agent = Agent()
+        self.agent = Agent(confirmation_phrase)
         self.voice_id = voice_id
         self.xi_client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
         self.g_client = Groq(api_key=GROQ_API_KEY)
-        self.activation_phrase = ""
-        self.confirmation_phrase = ""
+        self.activation_phrase = activation_phrase
+        self.location = "Canada"
 
     def is_silence(self, data):
         """
@@ -283,14 +285,14 @@ class VoiceAssistant:
             stream.stop_stream()
             stream.close()
     
-    def chat(self, query: str, confirmation_phrase: str, call_made: bool=False) -> str:
+    def chat(self, query: str, call_made: bool=False) -> str:
         start = time()
         if call_made:
-            response = self.agent.chat(query, confirmation_phrase, False, True)
+            response = self.agent.chat(query, False, True)
             end = time()
             print(f"Response: {response}\nResponse Time: {end - start}")
             return response
-        response = self.agent.chat(query, confirmation_phrase)
+        response = self.agent.chat(query)
         end = time()
         print(f"Response: {response}\nResponse Time: {end - start}")
         return response
@@ -299,7 +301,8 @@ class VoiceAssistant:
         """
         Main function to run the voice assistant.
         """
-        global call_made
+        global call_made, voice_undetermined
+
         while True:
             # STT
             audio_bytes = self.listen_for_speech()
@@ -307,7 +310,7 @@ class VoiceAssistant:
 
             if call_made:
             # Agent
-                response_text = self.chat(text, self.confirmation_phrase, True)
+                response_text = self.chat(text, True)
                 
                 # TTS
                 audio_stream = self.text_to_speech(response_text)
@@ -323,14 +326,25 @@ class VoiceAssistant:
                                             """
             
             else:
-                response_text = self.chat(text, self.confirmation_phrase, False)
+                response_text = self.chat(text, False)
                 
+                if voice_undetermined:
+                    if find_voice(text) == "woman":
+                        self.voice_id = Voices.JESSICA
+                    else:
+                        self.voice_id = Voices.CHARLIE
+                    voice_undetermined = False
+
                 # TTS
                 audio_stream = self.text_to_speech(response_text)
                 audio_iterator = self.audio_stream_to_iterator(audio_stream)
                 self.stream_audio(audio_iterator)
 
+                location = find_location(text)
+                if location != "None":
+                    self.location = location
+
                 if self.activation_phrase in text.lower():
                     print("Activation Phrase Detected")
-                    send_message(client, "asdf")
+                    send_message(client, self.activation_phrase)
         

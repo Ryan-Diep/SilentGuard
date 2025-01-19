@@ -19,9 +19,9 @@ if not GROQ_API_KEY:
 
 class Voices(Enum):
     CHARLIE = "IKne3meq5aSn9XLyUdCD"
-    ADAM = "pNInz6obpgDQGcFmaJgB" 
+    JESSICA = "cgSgspJ2msm6clMCkdW9" 
 
-VOICE_ID = Voices.ADAM
+VOICE_ID = Voices.CHARLIE
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 44100
