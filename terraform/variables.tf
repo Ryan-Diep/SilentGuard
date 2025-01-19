@@ -39,6 +39,11 @@ variable "solace_port" {
   type        = string
 }
 
+variable "solace_topic" {
+  description = "Solace topic to publish to"
+  type        = string
+}
+
 variable "groq_api_key" {
   description = "Groq API key"
   type        = string

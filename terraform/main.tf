@@ -52,7 +52,12 @@ resource "aws_lambda_function" "message_handler" {
 
   environment {
     variables = {
-      API_KEY = var.groq_api_key
+      API_KEY         = var.groq_api_key
+      SOLACE_USERNAME = var.solace_username
+      SOLACE_PASSWORD = var.solace_password
+      SOLACE_URL      = var.solace_url
+      SOLACE_PORT     = var.solace_port
+      SOLACE_TOPIC    = var.solace_topic
     }
   }
 }
