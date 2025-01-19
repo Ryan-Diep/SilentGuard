@@ -22,7 +22,7 @@ resource "aws_lambda_layer_version" "groq_layer" {
 }
 
 #############################################################################################
-# Lambda Function for Message Handling
+# Lambda Function
 data "archive_file" "lambda_function" {
   type        = "zip"
   source_file = "${path.module}/../lambdas/lambda_function.py"
@@ -46,6 +46,11 @@ resource "aws_lambda_function" "message_handler" {
       API_KEY = var.groq_api_key
     }
   }
+}
+
+resource "aws_cloudwatch_log_group" "lambda_log_group" {
+  name              = "/aws/lambda/${aws_lambda_function.message_handler.function_name}"
+  retention_in_days = 1
 }
 
 #############################################################################################
@@ -111,6 +116,16 @@ resource "aws_apigatewayv2_stage" "default_stage" {
   api_id      = aws_apigatewayv2_api.http_api.id
   name        = "default"
   auto_deploy = true
+}
+
+#############################################################################################
+# Lambda Permission to Allow API Gateway Trigger
+resource "aws_lambda_permission" "allow_api_gateway" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.message_handler.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.http_api.execution_arn}/*/*"
 }
 
 #############################################################################################
