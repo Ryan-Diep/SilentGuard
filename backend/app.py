@@ -26,7 +26,6 @@ def on_publish(client, userdata, mid):
 
 def send_message(location):
     # If using websockets (protocol is ws or wss), must set the transport for the client as below
-    # client = mqtt.Client(transport='websockets')
     client = mqtt.Client()
 
     client.on_connect = on_connect
@@ -37,14 +36,19 @@ def send_message(location):
     client.tls_set(ca_certs=certifi.where())
 
     # Enter your password here
-    load_dotenv()
+    # Get the parent directory of the current file
+    parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+    # Build the path to the .env file
+    dotenv_path = os.path.join(parent_dir, ".env")
+    load_dotenv(dotenv_path)
     client.username_pw_set('solace-cloud-client', os.getenv('PASSWORD'))
 
     # Use the host and port from Solace Cloud without the protocol
     client.connect(os.getenv('SOLACE_URL'), int(os.getenv('PORT')))
 
     client.loop_start()
-    topic = "keyword-detected"
-    client.publish(topic, json.dumps({"location": location}))
+    topic = os.getenv('TOPIC')
+    client.publish(topic, json.dumps({"location": location}), qos=1)
     client.loop_stop()
     client.disconnect()
