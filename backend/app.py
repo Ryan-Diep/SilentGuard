@@ -1,4 +1,5 @@
 import os
+from threading import Thread
 import wave
 from time import time
 from typing import Optional
@@ -93,7 +94,11 @@ def start_call():
     print(f"Confirmation Phrase: {confirmation_phrase}")
 
     assistant = VoiceAssistant()
-    assistant.run()
+    assistant.activation_phrase = activation_phrase
+    assistant.confirmation_phrase = confirmation_phrase
+    # assistant.run()
+    thread = Thread(target=assistant.run, daemon=True)
+    thread.start()
 
     # Respond back to the client
     return jsonify({"message": "Call started successfully!"}), 200
@@ -108,7 +113,8 @@ class VoiceAssistant:
         self.voice_id = voice_id
         self.xi_client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
         self.g_client = Groq(api_key=GROQ_API_KEY)
-        self.activation_phrase = "i'm testing"
+        self.activation_phrase = ""
+        self.confirmation_phrase = ""
 
     def is_silence(self, data):
         """
